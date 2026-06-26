@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: wellness365-api
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: AQ.Ab8RN6KGyUTVhYegqiYDzUm_XoIuaaoh4VRMLgX1le7ZPdrPMA
+        sync: false        # you'll paste this manually in the Render dashboard
+    autoDeploy: true

@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const Anthropic = require("@anthropic-ai/sdk");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const products = require("./products.json");
 
 const app = express();
@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3001;
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Build product context string injected into every system prompt
 const buildProductContext = () => {
@@ -52,22 +52,26 @@ app.post("/chat", async (req, res) => {
     return res.status(400).json({ error: "messages array is required" });
   }
 
-  // Validate message format
-  const validMessages = messages.filter(
-    (m) => m.role && m.content && typeof m.content === "string"
-  );
-
   try {
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 600,
-      system: SYSTEM_PROMPT,
-      messages: validMessages,
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      systemInstruction: SYSTEM_PROMPT,
     });
 
-    const reply = response.content[0].text;
+    // Convert messages to Gemini format
+    // Gemini uses "user" and "model" roles (not "assistant")
+    const history = messages.slice(0, -1).map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
 
-    // Extract any product recommendations to send back as structured data
+    const lastMessage = messages[messages.length - 1].content;
+
+    const chat = model.startChat({ history });
+    const result = await chat.sendMessage(lastMessage);
+    const reply = result.response.text();
+
+    // Extract product recommendations from the reply
     const recommendedProducts = products.filter((p) =>
       reply.toLowerCase().includes(p.name.toLowerCase())
     );
@@ -83,7 +87,7 @@ app.post("/chat", async (req, res) => {
       })),
     });
   } catch (err) {
-    console.error("Anthropic API error:", err.message);
+    console.error("Gemini API error:", err.message);
     res.status(500).json({
       error: "Could not reach the wellness advisor. Please try again.",
     });
