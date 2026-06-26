@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 const products = require("./products.json");
 
 const app = express();
@@ -9,7 +9,8 @@ const PORT = process.env.PORT || 3001;
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const MODEL_NAME = "gemini-2.5-flash";
 
 // Build product context string injected into every system prompt
 const buildProductContext = () => {
@@ -53,11 +54,6 @@ app.post("/chat", async (req, res) => {
   }
 
   try {
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-      systemInstruction: SYSTEM_PROMPT,
-    });
-
     // Convert messages to Gemini format
     // Gemini uses "user" and "model" roles (not "assistant")
     const history = messages.slice(0, -1).map((m) => ({
@@ -67,9 +63,16 @@ app.post("/chat", async (req, res) => {
 
     const lastMessage = messages[messages.length - 1].content;
 
-    const chat = model.startChat({ history });
-    const result = await chat.sendMessage(lastMessage);
-    const reply = result.response.text();
+    const chat = ai.chats.create({
+      model: MODEL_NAME,
+      history,
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+      },
+    });
+
+    const result = await chat.sendMessage({ message: lastMessage });
+    const reply = result.text;
 
     // Extract product recommendations from the reply
     const recommendedProducts = products.filter((p) =>
